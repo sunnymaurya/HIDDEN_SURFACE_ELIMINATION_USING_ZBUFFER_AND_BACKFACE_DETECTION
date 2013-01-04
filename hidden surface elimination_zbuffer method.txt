@@ -1,0 +1,332 @@
+// SUNNY KUMAR MAURYA
+//HIDDEN SURFACE REMOVAL USING Z BUFFER METHOD USING GRAPHICS.h IN C 
+
+
+
+#include<stdlib.h>
+#include<math.h>
+#include<conio.h>
+#include<stdio.h>
+#include<graphics.h>
+#define PI 22/7
+struct tedge
+{
+int yupper ;
+float xintersect,dxperscan ;
+struct tedge *next ;
+};
+typedef struct tedge edge;
+struct dcpt1
+{
+int x ;
+int y ;
+int z;
+};
+typedef struct dcpt1 dcpt;
+dcpt **polys; /*holds the vertices of the polygons*/
+float **planes; /*holds the coeffs. of the plane equations*/
+int poly_no; /*polygon under consideration*/
+int xmin,ymin,xmax,ymax ;
+int zbuffer[100][100];
+int screen[100][100];
+void insertedge(edge *list,edge *edge1)
+{
+edge *p, *q=list ;
+p = q->next ;
+while(p!=NULL)
+{
+if (edge1->xintersect < p->xintersect)
+p = NULL ;
+else
+{
+q = p ;
+p = p->next ;
+}
+}
+edge1->next = q->next ;
+q->next = edge1;
+}
+int ynext(int k,int cnt,dcpt *pts)
+{
+int j ;
+if ((k+1)>(cnt-1))
+j = 0 ;
+else
+j = k+1 ;
+while(pts[k].y == pts[j].y)
+if ((j+1)>(cnt-1))
+j = 0 ;
+else
+j++ ;
+return (pts[j].y) ;
+}
+void makeedgerec(dcpt lower,dcpt upper,int ycomp,edge *edge1,edge *edges[])
+{
+edge1->dxperscan = (float)(upper.x-lower.x)/(upper.y-lower.y) ;
+edge1->xintersect = lower.x ;
+if (upper.y<ycomp)
+edge1->yupper = upper.y-1 ;
+else
+edge1->yupper = upper.y ;
+insertedge(edges[lower.y],edge1) ;
+}
+void buildedgelist(int cnt,dcpt *pts,edge *edges[])
+{
+edge *edge1 ;
+dcpt v1, v2 ;
+int i, yprev=pts[cnt-2].y ;
+v1.x = pts[cnt-1].x ;
+v1.y = pts[cnt-1].y ;
+for(i=0;i<cnt;i++)
+{
+v2 = pts[i] ;
+if (v1.y != v2.y)
+{
+edge1 = (edge*)malloc(sizeof(edge)) ;
+if (v1.y<v2.y)
+makeedgerec(v1,v2,ynext(i,cnt,pts),edge1,edges) ;
+else
+makeedgerec(v2,v1,yprev,edge1,edges) ;
+}
+yprev = v1.y ;
+v1 = v2 ;
+}
+}
+void buildactivelist(int scan,edge *active,edge *edges[])
+{
+edge *p,*q ;
+p = edges[scan]->next ;
+while(p)
+{
+q = p->next ;
+insertedge(active,p) ;
+p = q ;
+}
+}
+void checkZbuff(int x, int y, int color)
+{
+int z;
+if(planes[poly_no][2]!=0)
+z=(-1.0)*(planes[poly_no][0]*x*1.0+planes[poly_no][1]*y*1.0+planes[poly_no][3])/planes[poly_no][2];
+else
+z=32767;
+if(z>=zbuffer[x][y])
+{
+screen[x][y]=color;
+zbuffer[x][y]=z;
+}
+}
+void fillscan(int scan,edge *active, int color)
+{
+edge *p1,*p2 ;
+int i ;
+p1 = active->next ;
+while(p1)
+{
+p2 = p1->next ;
+for(i=p1->xintersect;i<=(p2->xintersect);i++)
+{ /*putpixel((int)i,scan,color) ;*/
+checkZbuff(i,scan,color);
+}
+p1 = p2->next ;
+}
+}
+void deleteafter(edge *q)
+{
+edge *p = q->next ;
+q->next = p->next ;
+free(p) ;
+}
+void updateactivelist(int scan, edge *active)
+{
+edge *q=active, *p=active->next ;
+while(p)
+if (scan >= p->yupper)
+{
+p = p->next ;
+deleteafter(q) ;
+}
+else
+{
+p->xintersect = p->xintersect + p->dxperscan ;
+q = p ;
+p = p->next ;
+}
+}
+void resortactivelist(edge *active)
+{
+edge *q,*p=active->next ;
+active->next = NULL ;
+while(p)
+{
+q = p->next ;
+insertedge(active,p) ;
+p = q ;
+}
+}
+void scanfill(int cnt,dcpt *pts, int color)
+{
+edge *edges[480],*active ;
+int i,scan ;
+for(i=ymax;i<ymin;i++)
+{
+edges[i] =(edge *)malloc(sizeof(edge)) ;
+edges[i]->next = NULL ;
+}
+buildedgelist(cnt,pts,edges) ;
+active = (edge *)malloc(sizeof(edge)) ;
+active->next = NULL ;
+for(scan=ymax;scan<ymin;scan++)
+{
+buildactivelist(scan,active,edges) ;
+if (active->next)
+{
+fillscan(scan,active,color) ;
+updateactivelist(scan,active) ;
+resortactivelist(active) ;
+}
+}
+}
+void scanZ(dcpt *ver, int n, int color)
+{
+int i;
+ymax = ver[0].y ;
+ymin = ver[0].y ;
+xmin = ver[0].x ;
+xmax = ver[0].x ;
+for(i=1;i<n;i++)
+{
+if (ymin<ver[i].y)
+ymin = ver[i].y ;
+if (ymax>ver[i].y)
+ymax = ver[i].y ;
+}
+scanfill(n,ver,color) ;
+}
+void main()
+{
+int gdriver = DETECT, gmode, errorcode;
+int *color;
+char ch;
+int flag;
+int no_poly;
+int i,j;
+int k,l,m;
+int *n;
+float angle=0;
+float **temp;
+float matrix[4][4];
+float rad_angle;
+float x1,y1,z1,x2,y2,z2,x3,y3,z3;
+clrscr();
+matrix[0][3]=0;
+matrix[1][3]=0;
+matrix[2][3]=0;
+matrix[3][3]=1;
+matrix[3][0]=0;
+matrix[3][1]=0;
+matrix[3][2]=0;
+printf("Enter number of polygons:");
+scanf("%d",&no_poly);
+temp=(float**)malloc(4*sizeof(float));
+planes=(float**)malloc(no_poly*sizeof(float));
+polys=(dcpt**)malloc(no_poly*sizeof(dcpt));
+color=(int*)malloc(no_poly*sizeof(int));
+n=(int*)malloc(no_poly*sizeof(int));
+for(i=0;i<100;++i)
+for(j=0;j<100;++j)
+{
+zbuffer[i][j]=-32768;
+screen[i][j]=BLACK;
+}
+for(i=0;i<no_poly;++i)
+{
+printf("\nEnter the number of sides of polygon number %d: ",i+1) ;
+scanf("%d",&n[i]) ;
+printf("\nColor of this polygon?:");
+scanf("%d",&color[i]);
+if (n[i]<=2)
+{
+printf("\n Invalid Entry " ) ;
+printf("\n Press any key to Exit " );
+getch() ;
+exit(1) ;
+}
+polys[i]=(dcpt*)malloc(sizeof(dcpt)*n[i]);
+planes[i]=(float*)malloc(4*sizeof(float));
+for(j=0;j<n[i];++j)
+{
+printf("Enter x%d,y%d,z%d:",j+1,j+1,j+1);
+scanf("%d %d %d",&(polys[i][j].x),&(polys[i][j].y),&(polys[i][j].z));
+}
+}
+clrscr();
+for(i=0;i<no_poly;++i)
+for(j=0;j<4;++j)
+temp[j]=(float*)malloc(n[i]*sizeof(float));
+initgraph(&gdriver,&gmode,"c:\\tc\\bgi");
+do
+{
+for(i=0;i<no_poly;++i)
+{
+x1=polys[i][0].x;y1=polys[i][0].y;z1=polys[i][0].z;
+x2=polys[i][1].x;y2=polys[i][1].y;z2=polys[i][1].z;
+x3=polys[i][2].x;y3=polys[i][2].y;z3=polys[i][2].z;
+/*A*/
+planes[i][0]=y1*(z2-z3)+y2*(z3-z1)+y3*(z1-z2);
+/*B*/
+planes[i][1]=z1*(x2-x3)+z2*(x3-x1)+z3*(x1-x2);
+/*C*/
+planes[i][2]=x1*(y2-y3)+x2*(y3-y1)+x3*(y1-y2);
+/*D*/
+planes[i][3]=(-1)*x1*(y2*z3-y3*z2)-x2*(y3*z1-y1*z3)-x3*(y1*z2-y2*z1);
+}
+for(poly_no=0;poly_no<no_poly;++poly_no)
+scanZ(polys[poly_no],n[poly_no],color[poly_no]);
+for(i=0;i<100;++i)
+for(j=0;j<100;++j)
+putpixel(i,j,screen[i][j]);
+ch=getch();
+cleardevice();
+switch(ch)
+{
+case 75:angle=1;break;
+case 77:angle=-1;break;
+default:flag=1;break;
+}
+if(flag)
+{
+flag=0;
+continue;
+}
+rad_angle=angle*PI/180.0;
+matrix[0][0]=cos(rad_angle);
+matrix[0][2]=sin(rad_angle);
+matrix[2][0]=(-1)*sin(rad_angle);
+matrix[2][2]=cos(rad_angle);
+matrix[0][1]=0;matrix[1][0]=0;matrix[1][1]=1;matrix[1][2]=0;matrix[2][1]=0;
+for(i=0;i<no_poly;++i)
+{
+for(l=0;l<n[i];++l)
+{
+temp[0][l]=polys[i][l].x;
+temp[1][l]=polys[i][l].y;
+temp[2][l]=polys[i][l].z;
+temp[3][l]=1;
+polys[i][l].x=0;
+polys[i][l].y=0;
+polys[i][l].z=0;
+}
+for(l=0;l<n[i];++l)
+for(m=0;m<4;m++)
+{
+(polys[i][l].x)+=(matrix[0][m]*temp[m][l]);
+(polys[i][l].y)+=(matrix[1][m]*temp[m][l]);
+(polys[i][l].z)+=(matrix[2][m]*temp[m][l]);
+}
+}
+}while(ch!='e');
+getch();
+cleardevice();
+closegraph();
+}
